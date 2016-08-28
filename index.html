@@ -21,7 +21,7 @@ Latest code should be available at https://github.com/earthiverse
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>3d tests</title>
+<title>3D Minecraft Skin Viewer</title>
 <script src="js/2dskin.js" type="text/javascript"></script>
 <script src="js/three.min.js" type="text/javascript"></script>
 </head>
@@ -41,7 +41,7 @@ body {
 }
 
 #sidebar {
-	background-color: rgba(255,255,255,0.8);
+	background-color: rgba(255, 255, 255, 0.6);
 	border-right:10px solid #999;
 	height:100%;
 	position: absolute;
@@ -89,7 +89,7 @@ body {
 }
 
 #info {
-	color: #FFFFFF;
+	color: #000000;
 	bottom:5px;
 	font-size:9px;
 	right:5px;
@@ -99,15 +99,20 @@ body {
 }
 
 #info a {
-	color: #FFFFFF;
+	color: #0062ff;
 	font-weight:bold;
 }
 </style>
 <body>
 <canvas id="canvas" width="64" height="64"></canvas>
 <div id="sidebar">
-	<strong>Username</strong>
-	<input id="username" type="text" value="earthiverse">
+	<strong>Enter Username</strong>
+	<input id="username" type="text" value="Termynat0r">
+    <div ><br /></div>
+    
+	<strong>Or load skin file</strong>
+	<input type="file" accept="image/*" id="file_input">
+	<div ><br /></div>
 
 	<strong>Toggle Visibility - Body Parts</strong>
 	<label><input id="headToggle" type="checkbox" checked>Head</label>
@@ -116,6 +121,7 @@ body {
 	<label><input id="rightArmToggle" type="checkbox" checked>Right Arm</label>
 	<label><input id="leftLegToggle" type="checkbox" checked>Left Leg</label>
 	<label><input id="rightLegToggle" type="checkbox" checked>Right Leg</label>
+    <div ><br /></div>
 	
 	<strong>Toggle Visibility - Secondary Layer</strong>
 	<label><input id="head2Toggle" type="checkbox" checked>Head</label>
@@ -129,23 +135,27 @@ body {
 </div>
 <div id="info">
 	3D Skin Viewer v2 by <a href="https://github.com/earthiverse/3D-Minecraft-Skin-Viewer">earthiverse</a><br />
+    3D Skin Viewer v3 by <a href="http://twitter.com/Termynator">Termynat0r</a><br />
 	Skins downloaded from <a href="https://crafatar.com/">Crafatar</a>
 </div>
 <script type="text/javascript">
 	var scene, camera, renderer;
-	var geometry, material, mesh;
-	
-	var rightLeg2Box, leftLeg2Box;
 	
 	var radius = 32;
 	var alpha = 0;
+	var rotationX = 0;
+    var rotationY = 0;
 	
 	var sidebarWidth = 250;
+    var rendererIsSetup = false;
 
+    scene = new THREE.Scene();
+    
+    //Setup Camera
 	camera = new THREE.PerspectiveCamera(75, (window.innerWidth - sidebarWidth) / window.innerHeight, 1, 10000);
-	camera.position.y = -12;
-	
-	scene = new THREE.Scene();
+    var camera_translate = -12;
+    var camera_target = new THREE.Object3D()
+    camera_target.position.set(0, camera_translate, 0);
 	
 	canvas = document.getElementById('canvas');
         canvas.width = 64;
@@ -162,7 +172,7 @@ body {
 	
 	var img = new Image();
 	img.crossOrigin = '';
-	var hasAnimate = false;
+    var hasAnimate = false;
 	img.onload = function() {
 		console.log("Loaded Image");
 		
@@ -174,66 +184,132 @@ body {
 		
 		// Convert the image if need be
 		if(img.height == 32) Convert6432To6464(context);
-		FixNonVisible(context);
-		FixOverlay(context);
+        
+        //Check if the skin is in alex or steve format
+        var smallSkin = IsSmallSkinFormat(context);
+        
+		FixNonVisible(context, smallSkin);
+        //Minecraft doesn't anymore remove overlays if they aren't transparent
+        //Instead you can remove your characters overlays in the minecraft settings
 		
 		skinTexture.needsUpdate = true;
-	
 		material.needsUpdate = true;
 		material2.needsUpdate = true;
-		
-		if(!hasAnimate)
-		{
-			RenderSkin();
-			hasAnimate = true;
-			Animate();
-		}
+        
+        //Needs to be re-rendered on alex/steve format change
+        RenderSkin(smallSkin); 
+        
+        if (!hasAnimate) {
+            hasAnimate = true;
+            Animate();
+        }
 	}
 	img.onerror = function() {
 		console.log("Failed loading " + img.src);
 	}
-	
-	// I use crafatar because it allows CORS requests.
+    
+    // I use crafatar because it allows CORS requests.
 	// Minotar stopped working.
-	img.src = 'http://crafatar.com/skins/earthiverse';
-	
-	function RenderSkin() {
+	img.src = 'http://crafatar.com/skins/Termynat0r';
+
+    //Moving the camera via mouse
+	var isDown = false;
+	var oldMousePos;
+    document.getElementById('model').addEventListener("mousedown", handleMouseDown, false);
+	function handleMouseDown(e){
+		oldMousePos = getMousePos(document.getElementById('model'), e);
+  		isDown=true;
+	}
+    document.getElementById('model').addEventListener("mousemove", handleMouseMove, false);
+	function handleMouseMove(e){
+  		if(!isDown){ return; }
+		var pos = getMousePos(document.getElementById('model'), e);
+  		var dx=pos.x-oldMousePos.x;
+  		var dy=pos.y-oldMousePos.y;
+  		rotationX += -dx/100.0;
+        rotationY += -dy/100.0;
+        if (rotationY > Math.PI/2) rotationY = Math.PI/2;
+        else if (rotationY < -Math.PI/2) rotationY = -Math.PI/2;
+  		oldMousePos = pos;
+	}
+    document.getElementById('model').addEventListener("mouseup", handleMouseUp, false);
+	function handleMouseUp(e){
+      isDown=false;
+    }
+    document.getElementById('model').addEventListener("mouseout", handleMouseOut, false);
+    function handleMouseOut(e){
+      isDown=false;
+    }
+    function getMousePos(aElement, evt) {
+    	var rect = aElement.getBoundingClientRect();
+    	return {
+      		x: evt.clientX - rect.left,
+      		y: evt.clientY - rect.top
+    	};
+	}
+    
+    
+    // Clears all children and subchildren from an object
+    THREE.Object3D.prototype.clear = function(){
+        var children = this.children;
+        for(var i = children.length - 1; i >= 0 ; i--){
+            var child = children[i];
+            child.clear();
+            this.remove(child);
+        };
+    };
+    
+	function RenderSkin(smallSkin) {
+        var armWidth = 4;
+        var ssT = 0; //smallSkinTranslation
+        if (smallSkin) {
+            armWidth = 3;
+            ssT = 1;
+        }
+        
+        if (rendererIsSetup) {
+            console.log("Re-Rendering Skin");
+            scene.clear();
+        }
+        
+        var off = 0.1; //Overlay Offset
+        
 		// Head Parts
 		var headTop = [
-			new THREE.Vector2(0.125, 0.875),
-			new THREE.Vector2(0.25, 0.875),
-			new THREE.Vector2(0.25, 1),
+			new THREE.Vector2(0.125, 56/64),
+			new THREE.Vector2(16/64, 56/64),
+			new THREE.Vector2(16/64, 1),
 			new THREE.Vector2(0.125, 1)
 		];
 		var headBottom = [
-			new THREE.Vector2(0.25, 0.875),
-			new THREE.Vector2(0.375, 0.875),
+			new THREE.Vector2(16/64, 56/64),
+			new THREE.Vector2(0.375, 56/64),
 			new THREE.Vector2(0.375, 1),
-			new THREE.Vector2(0.25, 1)
+			new THREE.Vector2(16/64, 1)
 		];
 		var headLeft = [
-			new THREE.Vector2(0, 0.75),
-			new THREE.Vector2(0.125, 0.75),
-			new THREE.Vector2(0.125, 0.875),
-			new THREE.Vector2(0, 0.875)
+			new THREE.Vector2(0, 48/64),
+			new THREE.Vector2(0.125, 48/64),
+			new THREE.Vector2(0.125, 56/64),
+			new THREE.Vector2(0, 56/64)
 		];
 		var headFront = [
-			new THREE.Vector2(0.125, 0.75),
-			new THREE.Vector2(0.25, 0.75),
-			new THREE.Vector2(0.25 ,0.875),
-			new THREE.Vector2(0.125 ,0.875)
+			new THREE.Vector2(0.125, 48/64),
+			new THREE.Vector2(16/64, 48/64),
+			new THREE.Vector2(16/64 ,56/64),
+			new THREE.Vector2(0.125 ,56/64)
 		];
 		var headRight = [
-			new THREE.Vector2(0.25, 0.75),
-			new THREE.Vector2(0.375, 0.75),
-			new THREE.Vector2(0.375, 0.875),
-			new THREE.Vector2(0.25, 0.875)
+			new THREE.Vector2(16/64, 48/64),
+			new THREE.Vector2(0.375, 48/64),
+			new THREE.Vector2(0.375, 56/64),
+			new THREE.Vector2(16/64, 56/64)
 		];
 		var headBack = [
-			new THREE.Vector2(0.375, 0.75),
-			new THREE.Vector2(0.5, 0.75),
-			new THREE.Vector2(0.5, 0.875),
-			new THREE.Vector2(0.375, 0.875)
+			new THREE.Vector2(0.375, 48/64),
+			new THREE.Vector2(32/64, 48/64),
+			new THREE.Vector2(32/64, 56/64),
+			new THREE.Vector2(0.375, 56/64)
 		];
 		headBox = new THREE.BoxGeometry(8, 8, 8, 0, 0, 0);
 		headBox.faceVertexUvs[0] = [];
@@ -255,40 +331,40 @@ body {
 		
 		// Body Parts
 		var bodyTop = [
-			new THREE.Vector2(0.3125, 0.6875),
-			new THREE.Vector2(0.4375, 0.6875),
-			new THREE.Vector2(0.4375, 0.75),
-			new THREE.Vector2(0.3125, 0.75)
+			new THREE.Vector2(0.3125, 44/64),
+			new THREE.Vector2(0.4375, 44/64),
+			new THREE.Vector2(0.4375, 48/64),
+			new THREE.Vector2(0.3125, 48/64)
 		];
 		var bodyBottom = [
-			new THREE.Vector2(0.4375, 0.6875),
-			new THREE.Vector2(0.5625, 0.6875),
-			new THREE.Vector2(0.5625, 0.75),
-			new THREE.Vector2(0.4375, 0.75)
+			new THREE.Vector2(0.4375, 44/64),
+			new THREE.Vector2(36/64, 44/64),
+			new THREE.Vector2(36/64, 48/64),
+			new THREE.Vector2(0.4375, 48/64)
 		];
 		var bodyLeft = [
-			new THREE.Vector2(0.25, 0.5),
-			new THREE.Vector2(0.3125, 0.5),
-			new THREE.Vector2(0.3125, 0.6875),
-			new THREE.Vector2(0.25, 0.6875)
+			new THREE.Vector2(16/64, 32/64),
+			new THREE.Vector2(0.3125, 32/64),
+			new THREE.Vector2(0.3125, 44/64),
+			new THREE.Vector2(16/64, 44/64)
 		];
 		var bodyFront = [
-			new THREE.Vector2(0.3125, 0.5),
-			new THREE.Vector2(0.4375, 0.5),
-			new THREE.Vector2(0.4375, 0.6875),
-			new THREE.Vector2(0.3125, 0.6875)
+			new THREE.Vector2(0.3125, 32/64),
+			new THREE.Vector2(0.4375, 32/64),
+			new THREE.Vector2(0.4375, 44/64),
+			new THREE.Vector2(0.3125, 44/64)
 		];
 		var bodyRight = [
-			new THREE.Vector2(0.4375, 0.5),
-			new THREE.Vector2(0.5, 0.5),
-			new THREE.Vector2(0.5, 0.6875),
-			new THREE.Vector2(0.4375, 0.6875)
+			new THREE.Vector2(0.4375, 32/64),
+			new THREE.Vector2(32/64, 32/64),
+			new THREE.Vector2(32/64, 44/64),
+			new THREE.Vector2(0.4375, 44/64)
 		];
 		var bodyBack = [
-			new THREE.Vector2(0.5, 0.5),
-			new THREE.Vector2(0.625, 0.5),
-			new THREE.Vector2(0.625, 0.6875),
-			new THREE.Vector2(0.5, 0.6875)
+			new THREE.Vector2(32/64, 32/64),
+			new THREE.Vector2(40/64, 32/64),
+			new THREE.Vector2(40/64, 44/64),
+			new THREE.Vector2(32/64, 44/64)
 		];
 		bodyBox = new THREE.BoxGeometry(8, 12, 4, 0, 0, 0);
 		bodyBox.faceVertexUvs[0] = [];
@@ -311,42 +387,42 @@ body {
 		
 		// Right Arm Parts
 		var rightArmTop = [
-			new THREE.Vector2(0.6875, 0.6875),
-			new THREE.Vector2(0.75, 0.6875),
-			new THREE.Vector2(0.75, 0.75),
-			new THREE.Vector2(0.6875, 0.75),
+			new THREE.Vector2(44/64, 44/64),
+			new THREE.Vector2((48-ssT)/64, 44/64),
+			new THREE.Vector2((48-ssT)/64, 48/64),
+			new THREE.Vector2(44/64, 48/64),
 		];
 		var rightArmBottom = [
-			new THREE.Vector2(0.75, 0.6875),
-			new THREE.Vector2(0.8125, 0.6875),
-			new THREE.Vector2(0.8125, 0.75),
-			new THREE.Vector2(0.75, 0.75)
+			new THREE.Vector2((48-ssT)/64, 44/64),
+			new THREE.Vector2((52-ssT*2)/64, 44/64),
+			new THREE.Vector2((52-ssT*2)/64, 48/64),
+			new THREE.Vector2((48-ssT)/64, 48/64)
 		];
 		var rightArmLeft = [
-			new THREE.Vector2(0.625, 0.5),
-			new THREE.Vector2(0.6875, 0.5),
-			new THREE.Vector2(0.6875, 0.6875),
-			new THREE.Vector2(0.625, 0.6875)
+			new THREE.Vector2(40/64, 32/64),
+			new THREE.Vector2(44/64, 32/64),
+			new THREE.Vector2(44/64, 44/64),
+			new THREE.Vector2(40/64, 44/64)
 		];
 		var rightArmFront = [
-			new THREE.Vector2(0.6875, 0.5),
-			new THREE.Vector2(0.75, 0.5),
-			new THREE.Vector2(0.75, 0.6875),
-			new THREE.Vector2(0.6875, 0.6875)
+			new THREE.Vector2(44/64, 32/64),
+			new THREE.Vector2((48-ssT)/64, 32/64),
+			new THREE.Vector2((48-ssT)/64, 44/64),
+			new THREE.Vector2(44/64, 44/64)
 		];
 		var rightArmRight = [
-			new THREE.Vector2(0.75, 0.5),
-			new THREE.Vector2(0.8125, 0.5),
-			new THREE.Vector2(0.8125, 0.6875),
-			new THREE.Vector2(0.75, 0.6875)
+			new THREE.Vector2((48-ssT)/64, 32/64),
+			new THREE.Vector2((52-ssT)/64, 32/64),
+			new THREE.Vector2((52-ssT)/64, 44/64),
+			new THREE.Vector2((48-ssT)/64, 44/64)
 		];
 		var rightArmBack = [
-			new THREE.Vector2(0.8125, 0.5),
-			new THREE.Vector2(0.875, 0.5),
-			new THREE.Vector2(0.875, 0.6875),
-			new THREE.Vector2(0.8125, 0.6875)
+			new THREE.Vector2((52-ssT)/64, 32/64),
+			new THREE.Vector2((56-ssT*2)/64, 32/64),
+			new THREE.Vector2((56-ssT*2)/64, 44/64),
+			new THREE.Vector2((52-ssT)/64, 44/64)
 		];
-		rightArmBox = new THREE.BoxGeometry(4, 12, 4, 0, 0, 0);
+		rightArmBox = new THREE.BoxGeometry(armWidth, 12, 4, 0, 0, 0);
 		rightArmBox.faceVertexUvs[0] = [];
 		rightArmBox.faceVertexUvs[0][0] = [rightArmRight[3], rightArmRight[0], rightArmRight[2]];
 		rightArmBox.faceVertexUvs[0][1] = [rightArmRight[0], rightArmRight[1], rightArmRight[2]];
@@ -368,42 +444,42 @@ body {
 		
 		// Left Arm Parts
 		var leftArmTop = [
-			new THREE.Vector2(0.5625, 0.1875),
-			new THREE.Vector2(0.625, 0.1875),
-			new THREE.Vector2(0.625, 0.25),
-			new THREE.Vector2(0.5625, 0.25),
+			new THREE.Vector2(36/64, 12/64),
+			new THREE.Vector2((40-ssT)/64, 12/64),
+			new THREE.Vector2((40-ssT)/64, 16/64),
+			new THREE.Vector2(36/64, 16/64),
 		];
 		var leftArmBottom = [
-			new THREE.Vector2(0.625, 0.1875),
-			new THREE.Vector2(0.6875, 0.1875),
-			new THREE.Vector2(0.6875, 0.25),
-			new THREE.Vector2(0.625, 0.25)
+			new THREE.Vector2((40-ssT)/64, 12/64),
+			new THREE.Vector2((44-ssT*2)/64, 12/64),
+			new THREE.Vector2((44-ssT*2)/64, 16/64),
+			new THREE.Vector2((40-ssT)/64, 16/64)
 		];
 		var leftArmLeft = [
-			new THREE.Vector2(0.5, 0),
-			new THREE.Vector2(0.5625, 0),
-			new THREE.Vector2(0.5625, 0.1875),
-			new THREE.Vector2(0.5, 0.1875)
+			new THREE.Vector2(32/64, 0),
+			new THREE.Vector2(36/64, 0),
+			new THREE.Vector2(36/64, 12/64),
+			new THREE.Vector2(32/64, 12/64)
 		];
 		var leftArmFront = [
-			new THREE.Vector2(0.5625, 0),
-			new THREE.Vector2(0.625, 0),
-			new THREE.Vector2(0.625, 0.1875),
-			new THREE.Vector2(0.5625, 0.1875)
+			new THREE.Vector2(36/64, 0),
+			new THREE.Vector2((40-ssT)/64, 0),
+			new THREE.Vector2((40-ssT)/64, 12/64),
+			new THREE.Vector2(36/64, 12/64)
 		];
 		var leftArmRight = [
-			new THREE.Vector2(0.625, 0),
-			new THREE.Vector2(0.6875, 0),
-			new THREE.Vector2(0.6875, 0.1875),
-			new THREE.Vector2(0.625, 0.1875)
+			new THREE.Vector2((40-ssT)/64, 0),
+			new THREE.Vector2((44-ssT)/64, 0),
+			new THREE.Vector2((44-ssT)/64, 12/64),
+			new THREE.Vector2((40-ssT)/64, 12/64)
 		];
 		var leftArmBack = [
-			new THREE.Vector2(0.6875, 0),
-			new THREE.Vector2(0.75, 0),
-			new THREE.Vector2(0.75, 0.1875),
-			new THREE.Vector2(0.6875, 0.1875)
+			new THREE.Vector2((44-ssT)/64, 0),
+			new THREE.Vector2((48-ssT*2)/64, 0),
+			new THREE.Vector2((48-ssT*2)/64, 12/64),
+			new THREE.Vector2((44-ssT)/64, 12/64)
 		];
-		leftArmBox = new THREE.BoxGeometry(4, 12, 4, 0, 0, 0);
+		leftArmBox = new THREE.BoxGeometry(armWidth, 12, 4, 0, 0, 0);
 		leftArmBox.faceVertexUvs[0] = [];
 		leftArmBox.faceVertexUvs[0][0] = [leftArmRight[3], leftArmRight[0], leftArmRight[2]];
 		leftArmBox.faceVertexUvs[0][1] = [leftArmRight[0], leftArmRight[1], leftArmRight[2]];
@@ -425,40 +501,40 @@ body {
 		
 		// Right Leg Parts
 		var rightLegTop = [
-			new THREE.Vector2(0.0625, 0.6875),
-			new THREE.Vector2(0.125, 0.6875),
-			new THREE.Vector2(0.125, 0.75),
-			new THREE.Vector2(0.0625, 0.75),
+			new THREE.Vector2(0.0625, 44/64),
+			new THREE.Vector2(0.125, 44/64),
+			new THREE.Vector2(0.125, 48/64),
+			new THREE.Vector2(0.0625, 48/64),
 		];
 		var rightLegBottom = [
-			new THREE.Vector2(0.125, 0.6875),
-			new THREE.Vector2(0.1875, 0.6875),
-			new THREE.Vector2(0.1875, 0.75),
-			new THREE.Vector2(0.125, 0.75)
+			new THREE.Vector2(0.125, 44/64),
+			new THREE.Vector2(12/64, 44/64),
+			new THREE.Vector2(12/64, 48/64),
+			new THREE.Vector2(0.125, 48/64)
 		];
 		var rightLegLeft = [
-			new THREE.Vector2(0, 0.5),
-			new THREE.Vector2(0.0625, 0.5),
-			new THREE.Vector2(0.0625, 0.6875),
-			new THREE.Vector2(0, 0.6875)
+			new THREE.Vector2(0, 32/64),
+			new THREE.Vector2(0.0625, 32/64),
+			new THREE.Vector2(0.0625, 44/64),
+			new THREE.Vector2(0, 44/64)
 		];
 		var rightLegFront = [
-			new THREE.Vector2(0.0625, 0.5),
-			new THREE.Vector2(0.125, 0.5),
-			new THREE.Vector2(0.125, 0.6875),
-			new THREE.Vector2(0.0625, 0.6875)
+			new THREE.Vector2(0.0625, 32/64),
+			new THREE.Vector2(0.125, 32/64),
+			new THREE.Vector2(0.125, 44/64),
+			new THREE.Vector2(0.0625, 44/64)
 		];
 		var rightLegRight = [
-			new THREE.Vector2(0.125, 0.5),
-			new THREE.Vector2(0.1875, 0.5),
-			new THREE.Vector2(0.1875, 0.6875),
-			new THREE.Vector2(0.125, 0.6875)
+			new THREE.Vector2(0.125, 32/64),
+			new THREE.Vector2(12/64, 32/64),
+			new THREE.Vector2(12/64, 44/64),
+			new THREE.Vector2(0.125, 44/64)
 		];
 		var rightLegBack = [
-			new THREE.Vector2(0.1875, 0.5),
-			new THREE.Vector2(0.25, 0.5),
-			new THREE.Vector2(0.25, 0.6875),
-			new THREE.Vector2(0.1875, 0.6875)
+			new THREE.Vector2(12/64, 32/64),
+			new THREE.Vector2(16/64, 32/64),
+			new THREE.Vector2(16/64, 44/64),
+			new THREE.Vector2(12/64, 44/64)
 		];
 		rightLegBox = new THREE.BoxGeometry(4, 12, 4, 0, 0, 0);
 		rightLegBox.faceVertexUvs[0] = [];
@@ -482,40 +558,40 @@ body {
 		
 		// Left Leg Parts
 		var leftLegTop = [
-			new THREE.Vector2(0.3125, 0.1875),
-			new THREE.Vector2(0.375, 0.1875),
-			new THREE.Vector2(0.375, 0.25),
-			new THREE.Vector2(0.3125, 0.25),
+			new THREE.Vector2(0.3125, 12/64),
+			new THREE.Vector2(0.375, 12/64),
+			new THREE.Vector2(0.375, 16/64),
+			new THREE.Vector2(0.3125, 16/64),
 		];
 		var leftLegBottom = [
-			new THREE.Vector2(0.375, 0.1875),
-			new THREE.Vector2(0.4375, 0.1875),
-			new THREE.Vector2(0.4375, 0.25),
-			new THREE.Vector2(0.375, 0.25)
+			new THREE.Vector2(0.375, 12/64),
+			new THREE.Vector2(0.4375, 12/64),
+			new THREE.Vector2(0.4375, 16/64),
+			new THREE.Vector2(0.375, 16/64)
 		];
 		var leftLegLeft = [
-			new THREE.Vector2(0.25, 0),
+			new THREE.Vector2(16/64, 0),
 			new THREE.Vector2(0.3125, 0),
-			new THREE.Vector2(0.3125, 0.1875),
-			new THREE.Vector2(0.25, 0.1875)
+			new THREE.Vector2(0.3125, 12/64),
+			new THREE.Vector2(16/64, 12/64)
 		];
 		var leftLegFront = [
 			new THREE.Vector2(0.3125, 0),
 			new THREE.Vector2(0.375, 0),
-			new THREE.Vector2(0.375, 0.1875),
-			new THREE.Vector2(0.3125, 0.1875)
+			new THREE.Vector2(0.375, 12/64),
+			new THREE.Vector2(0.3125, 12/64)
 		];
 		var leftLegRight = [
 			new THREE.Vector2(0.375, 0),
 			new THREE.Vector2(0.4375, 0),
-			new THREE.Vector2(0.4375, 0.1875),
-			new THREE.Vector2(0.375, 0.1875)
+			new THREE.Vector2(0.4375, 12/64),
+			new THREE.Vector2(0.375, 12/64)
 		];
 		var leftLegBack = [
 			new THREE.Vector2(0.4375, 0),
-			new THREE.Vector2(0.5, 0),
-			new THREE.Vector2(0.5, 0.1875),
-			new THREE.Vector2(0.4375, 0.1875)
+			new THREE.Vector2(32/64, 0),
+			new THREE.Vector2(32/64, 12/64),
+			new THREE.Vector2(0.4375, 12/64)
 		];
 		leftLegBox = new THREE.BoxGeometry(4, 12, 4, 0, 0, 0);
 		leftLegBox.faceVertexUvs[0] = [];
@@ -539,40 +615,40 @@ body {
 		
 		// Head Overlay Parts
 		var head2Top = [
-			new THREE.Vector2(0.625, 0.875),
-			new THREE.Vector2(0.75, 0.875),
-			new THREE.Vector2(0.75, 1),
-			new THREE.Vector2(0.625, 1)
+			new THREE.Vector2(40/64, 56/64),
+			new THREE.Vector2(48/64, 56/64),
+			new THREE.Vector2(48/64, 1),
+			new THREE.Vector2(40/64, 1)
 		];
 		var head2Bottom = [
-			new THREE.Vector2(0.75, 0.875),
-			new THREE.Vector2(0.875, 0.875),
-			new THREE.Vector2(0.875, 1),
-			new THREE.Vector2(0.75, 1)
+			new THREE.Vector2(48/64, 56/64),
+			new THREE.Vector2(56/64, 56/64),
+			new THREE.Vector2(56/64, 1),
+			new THREE.Vector2(48/64, 1)
 		];
 		var head2Left = [
-			new THREE.Vector2(0.5, 0.75),
-			new THREE.Vector2(0.625, 0.75),
-			new THREE.Vector2(0.625, 0.875),
-			new THREE.Vector2(0.5, 0.875)
+			new THREE.Vector2(32/64, 48/64),
+			new THREE.Vector2(40/64, 48/64),
+			new THREE.Vector2(40/64, 56/64),
+			new THREE.Vector2(32/64, 56/64)
 		];
 		var head2Front = [
-			new THREE.Vector2(0.625, 0.75),
-			new THREE.Vector2(0.75, 0.75),
-			new THREE.Vector2(0.75, 0.875),
-			new THREE.Vector2(0.625, 0.875)
+			new THREE.Vector2(40/64, 48/64),
+			new THREE.Vector2(48/64, 48/64),
+			new THREE.Vector2(48/64, 56/64),
+			new THREE.Vector2(40/64, 56/64)
 		];
 		var head2Right = [
-			new THREE.Vector2(0.75, 0.75),
-			new THREE.Vector2(0.875, 0.75),
-			new THREE.Vector2(0.875, 0.875),
-			new THREE.Vector2(0.75, 0.875)
+			new THREE.Vector2(48/64, 48/64),
+			new THREE.Vector2(56/64, 48/64),
+			new THREE.Vector2(56/64, 56/64),
+			new THREE.Vector2(48/64, 56/64)
 		];
 		var head2Back = [
-			new THREE.Vector2(0.875, 0.75),
-			new THREE.Vector2(1, 0.75),
-			new THREE.Vector2(1, 0.875),
-			new THREE.Vector2(0.875, 0.875)
+			new THREE.Vector2(56/64, 48/64),
+			new THREE.Vector2(1, 48/64),
+			new THREE.Vector2(1, 56/64),
+			new THREE.Vector2(56/64, 56/64)
 		];
 		head2Box = new THREE.BoxGeometry(9, 9, 9, 0, 0, 0);
 		head2Box.faceVertexUvs[0] = [];
@@ -596,40 +672,40 @@ body {
 		var body2Top = [
 			new THREE.Vector2(0.3125, 0.4375),
 			new THREE.Vector2(0.4375, 0.4375),
-			new THREE.Vector2(0.4375, 0.5),
-			new THREE.Vector2(0.3125, 0.5)
+			new THREE.Vector2(0.4375, 32/64),
+			new THREE.Vector2(0.3125, 32/64)
 		];
 		var body2Bottom = [
 			new THREE.Vector2(0.4375, 0.4375),
-			new THREE.Vector2(0.5625, 0.4375),
-			new THREE.Vector2(0.5625, 0.5),
-			new THREE.Vector2(0.4375, 0.5)
+			new THREE.Vector2(36/64, 0.4375),
+			new THREE.Vector2(36/64, 32/64),
+			new THREE.Vector2(0.4375, 32/64)
 		];
 		var body2Left = [
-			new THREE.Vector2(0.25, 0.25),
-			new THREE.Vector2(0.3125, 0.25),
+			new THREE.Vector2(16/64, 16/64),
+			new THREE.Vector2(0.3125, 16/64),
 			new THREE.Vector2(0.3125, 0.4375),
-			new THREE.Vector2(0.25, 0.4375)
+			new THREE.Vector2(16/64, 0.4375)
 		];
 		var body2Front = [
-			new THREE.Vector2(0.3125, 0.25),
-			new THREE.Vector2(0.4375, 0.25),
+			new THREE.Vector2(0.3125, 16/64),
+			new THREE.Vector2(0.4375, 16/64),
 			new THREE.Vector2(0.4375, 0.4375),
 			new THREE.Vector2(0.3125, 0.4375)
 		];
 		var body2Right = [
-			new THREE.Vector2(0.4375, 0.25),
-			new THREE.Vector2(0.5, 0.25),
-			new THREE.Vector2(0.5, 0.4375),
+			new THREE.Vector2(0.4375, 16/64),
+			new THREE.Vector2(32/64, 16/64),
+			new THREE.Vector2(32/64, 0.4375),
 			new THREE.Vector2(0.4375, 0.4375)
 		];
 		var body2Back = [
-			new THREE.Vector2(0.5, 0.25),
-			new THREE.Vector2(0.625, 0.25),
-			new THREE.Vector2(0.625, 0.4375),
-			new THREE.Vector2(0.5, 0.4375)
+			new THREE.Vector2(32/64, 16/64),
+			new THREE.Vector2(40/64, 16/64),
+			new THREE.Vector2(40/64, 0.4375),
+			new THREE.Vector2(32/64, 0.4375)
 		];
-		body2Box = new THREE.BoxGeometry(9, 13.5, 4.5, 0, 0, 0);
+		body2Box = new THREE.BoxGeometry(8.5, 13, 4.5, 0, 0, 0);
 		body2Box.faceVertexUvs[0] = [];
 		body2Box.faceVertexUvs[0][0] = [body2Right[3], body2Right[0], body2Right[2]];
 		body2Box.faceVertexUvs[0][1] = [body2Right[0], body2Right[1], body2Right[2]];
@@ -650,42 +726,42 @@ body {
 		
 		// Right Arm Overlay Parts
 		var rightArm2Top = [
-			new THREE.Vector2(0.6875, 0.4375),
-			new THREE.Vector2(0.75, 0.4375),
-			new THREE.Vector2(0.75, 0.5),
-			new THREE.Vector2(0.6875, 0.5),
+			new THREE.Vector2(44/64, 0.4375),
+			new THREE.Vector2((48-ssT)/64, 0.4375),
+			new THREE.Vector2((48-ssT)/64, 32/64),
+			new THREE.Vector2(44/64, 32/64),
 		];
 		var rightArm2Bottom = [
-			new THREE.Vector2(0.75, 0.4375),
-			new THREE.Vector2(0.8125, 0.4375),
-			new THREE.Vector2(0.8125, 0.5),
-			new THREE.Vector2(0.75, 0.5)
+			new THREE.Vector2((48-ssT)/64, 0.4375),
+			new THREE.Vector2((52-ssT*2)/64, 0.4375),
+			new THREE.Vector2((52-ssT*2)/64, 32/64),
+			new THREE.Vector2((48-ssT)/64, 32/64)
 		];
 		var rightArm2Left = [
-			new THREE.Vector2(0.625, 0.25),
-			new THREE.Vector2(0.6875, 0.25),
-			new THREE.Vector2(0.6875, 0.4375),
-			new THREE.Vector2(0.625, 0.4375)
+			new THREE.Vector2(40/64, 16/64),
+			new THREE.Vector2(44/64, 16/64),
+			new THREE.Vector2(44/64, 0.4375),
+			new THREE.Vector2(40/64, 0.4375)
 		];
 		var rightArm2Front = [
-			new THREE.Vector2(0.6875, 0.25),
-			new THREE.Vector2(0.75, 0.25),
-			new THREE.Vector2(0.75, 0.4375),
-			new THREE.Vector2(0.6875, 0.4375)
+			new THREE.Vector2(44/64, 16/64),
+			new THREE.Vector2((48-ssT)/64, 16/64),
+			new THREE.Vector2((48-ssT)/64, 0.4375),
+			new THREE.Vector2(44/64, 0.4375)
 		];
 		var rightArm2Right = [
-			new THREE.Vector2(0.75, 0.25),
-			new THREE.Vector2(0.8125, 0.25),
-			new THREE.Vector2(0.8125, 0.4375),
-			new THREE.Vector2(0.75, 0.4375)
+			new THREE.Vector2((48-ssT)/64, 16/64),
+			new THREE.Vector2((52-ssT)/64, 16/64),
+			new THREE.Vector2((52-ssT)/64, 0.4375),
+			new THREE.Vector2((48-ssT)/64, 0.4375)
 		];
 		var rightArm2Back = [
-			new THREE.Vector2(0.8125, 0.25),
-			new THREE.Vector2(0.875, 0.25),
-			new THREE.Vector2(0.875, 0.4375),
-			new THREE.Vector2(0.8125, 0.4375)
+			new THREE.Vector2((52-ssT)/64, 16/64),
+			new THREE.Vector2((56-ssT*2)/64, 16/64),
+			new THREE.Vector2((56-ssT*2)/64, 0.4375),
+			new THREE.Vector2((52-ssT)/64, 0.4375)
 		];
-		rightArm2Box = new THREE.BoxGeometry(4.5, 13.5, 4.5, 0, 0, 0);
+		rightArm2Box = new THREE.BoxGeometry(armWidth + off, 12 + off, 4 + off, 0, 0, 0);
 		rightArm2Box.faceVertexUvs[0] = [];
 		rightArm2Box.faceVertexUvs[0][0] = [rightArm2Right[3], rightArm2Right[0], rightArm2Right[2]];
 		rightArm2Box.faceVertexUvs[0][1] = [rightArm2Right[0], rightArm2Right[1], rightArm2Right[2]];
@@ -707,42 +783,42 @@ body {
 		
 		// Left Arm Overlay Parts
 		var leftArm2Top = [
-			new THREE.Vector2(0.8125, 0.1875),
-			new THREE.Vector2(0.875, 0.1875),
-			new THREE.Vector2(0.875, 0.25),
-			new THREE.Vector2(0.8125, 0.25),
+			new THREE.Vector2(52/64, 12/64),
+			new THREE.Vector2((56-ssT)/64, 12/64),
+			new THREE.Vector2((56-ssT)/64, 16/64),
+			new THREE.Vector2(52/64, 16/64),
 		];
 		var leftArm2Bottom = [
-			new THREE.Vector2(0.875, 0.1875),
-			new THREE.Vector2(0.9375, 0.1875),
-			new THREE.Vector2(0.9375, 0.25),
-			new THREE.Vector2(0.875, 0.25)
+			new THREE.Vector2((56-ssT)/64, 12/64),
+			new THREE.Vector2((60-ssT*2)/64, 12/64),
+			new THREE.Vector2((60-ssT*2)/64, 16/64),
+			new THREE.Vector2((56-ssT)/64, 16/64)
 		];
 		var leftArm2Left = [
-			new THREE.Vector2(0.75, 0),
-			new THREE.Vector2(0.8125, 0),
-			new THREE.Vector2(0.8125, 0.1875),
-			new THREE.Vector2(0.75, 0.1875)
+			new THREE.Vector2(48/64, 0),
+			new THREE.Vector2(52/64, 0),
+			new THREE.Vector2(52/64, 12/64),
+			new THREE.Vector2(48/64, 12/64)
 		];
 		var leftArm2Front = [
-			new THREE.Vector2(0.8125, 0),
-			new THREE.Vector2(0.875, 0),
-			new THREE.Vector2(0.875, 0.1875),
-			new THREE.Vector2(0.8125, 0.1875)
+			new THREE.Vector2(52/64, 0),
+			new THREE.Vector2((56-ssT)/64, 0),
+			new THREE.Vector2((56-ssT)/64, 12/64),
+			new THREE.Vector2(52/64, 12/64)
 		];
 		var leftArm2Right = [
-			new THREE.Vector2(0.875, 0),
-			new THREE.Vector2(0.9375, 0),
-			new THREE.Vector2(0.9375, 0.1875),
-			new THREE.Vector2(0.875, 0.1875)
+			new THREE.Vector2((56-ssT)/64, 0),
+			new THREE.Vector2((60-ssT)/64, 0),
+			new THREE.Vector2((60-ssT)/64, 12/64),
+			new THREE.Vector2((56-ssT)/64, 12/64)
 		];
 		var leftArm2Back = [
-			new THREE.Vector2(0.9375, 0),
-			new THREE.Vector2(1, 0),
-			new THREE.Vector2(1, 0.1875),
-			new THREE.Vector2(0.9375, 0.1875)
+			new THREE.Vector2((60-ssT)/64, 0),
+			new THREE.Vector2((64-ssT*2)/64, 0),
+			new THREE.Vector2((64-ssT*2)/64, 12/64),
+			new THREE.Vector2((60-ssT)/64, 12/64)
 		];
-		leftArm2Box = new THREE.BoxGeometry(4.5, 13.5, 4.5, 0, 0, 0);
+		leftArm2Box = new THREE.BoxGeometry(armWidth + off, 12 + off, 4 + off, 0, 0, 0);
 		leftArm2Box.faceVertexUvs[0] = [];
 		leftArm2Box.faceVertexUvs[0][0] = [leftArm2Right[3], leftArm2Right[0], leftArm2Right[2]];
 		leftArm2Box.faceVertexUvs[0][1] = [leftArm2Right[0], leftArm2Right[1], leftArm2Right[2]];
@@ -766,40 +842,40 @@ body {
 		var rightLeg2Top = [
 			new THREE.Vector2(0.0625, 0.4375),
 			new THREE.Vector2(0.125, 0.4375),
-			new THREE.Vector2(0.125, 0.5),
-			new THREE.Vector2(0.0625, 0.5),
+			new THREE.Vector2(0.125, 32/64),
+			new THREE.Vector2(0.0625, 32/64),
 		];
 		var rightLeg2Bottom = [
 			new THREE.Vector2(0.125, 0.4375),
-			new THREE.Vector2(0.1875, 0.4375),
-			new THREE.Vector2(0.1875, 0.5),
-			new THREE.Vector2(0.125, 0.5)
+			new THREE.Vector2(12/64, 0.4375),
+			new THREE.Vector2(12/64, 32/64),
+			new THREE.Vector2(0.125, 32/64)
 		];
 		var rightLeg2Left = [
-			new THREE.Vector2(0, 0.25),
-			new THREE.Vector2(0.0625, 0.25),
+			new THREE.Vector2(0, 16/64),
+			new THREE.Vector2(0.0625, 16/64),
 			new THREE.Vector2(0.0625, 0.4375),
 			new THREE.Vector2(0, 0.4375)
 		];
 		var rightLeg2Front = [
-			new THREE.Vector2(0.0625, 0.25),
-			new THREE.Vector2(0.125, 0.25),
+			new THREE.Vector2(0.0625, 16/64),
+			new THREE.Vector2(0.125, 16/64),
 			new THREE.Vector2(0.125, 0.4375),
 			new THREE.Vector2(0.0625, 0.4375)
 		];
 		var rightLeg2Right = [
-			new THREE.Vector2(0.125, 0.25),
-			new THREE.Vector2(0.1875, 0.25),
-			new THREE.Vector2(0.1875, 0.4375),
+			new THREE.Vector2(0.125, 16/64),
+			new THREE.Vector2(12/64, 16/64),
+			new THREE.Vector2(12/64, 0.4375),
 			new THREE.Vector2(0.125, 0.4375)
 		];
 		var rightLeg2Back = [
-			new THREE.Vector2(0.1875, 0.25),
-			new THREE.Vector2(0.25, 0.25),
-			new THREE.Vector2(0.25, 0.4375),
-			new THREE.Vector2(0.1875, 0.4375)
+			new THREE.Vector2(12/64, 16/64),
+			new THREE.Vector2(16/64, 16/64),
+			new THREE.Vector2(16/64, 0.4375),
+			new THREE.Vector2(12/64, 0.4375)
 		];
-		rightLeg2Box = new THREE.BoxGeometry(4.5, 13.5, 4.5, 0, 0, 0);
+		rightLeg2Box = new THREE.BoxGeometry(4 + off, 12 + off, 4 + off, 0, 0, 0);
 		rightLeg2Box.faceVertexUvs[0] = [];
 		rightLeg2Box.faceVertexUvs[0][0] = [rightLeg2Right[3], rightLeg2Right[0], rightLeg2Right[2]];
 		rightLeg2Box.faceVertexUvs[0][1] = [rightLeg2Right[0], rightLeg2Right[1], rightLeg2Right[2]];
@@ -821,42 +897,42 @@ body {
 		
 		// Left Leg Overlay Parts
 		var leftLeg2Top = [
-			new THREE.Vector2(0.0625, 0.1875),
-			new THREE.Vector2(0.125, 0.1875),
-			new THREE.Vector2(0.125, 0.25),
-			new THREE.Vector2(0.0625, 0.25),
+			new THREE.Vector2(0.0625, 12/64),
+			new THREE.Vector2(0.125, 12/64),
+			new THREE.Vector2(0.125, 16/64),
+			new THREE.Vector2(0.0625, 16/64),
 		];
 		var leftLeg2Bottom = [
-			new THREE.Vector2(0.125, 0.1875),
-			new THREE.Vector2(0.1875, 0.1875),
-			new THREE.Vector2(0.1875, 0.25),
-			new THREE.Vector2(0.125, 0.25)
+			new THREE.Vector2(0.125, 12/64),
+			new THREE.Vector2(12/64, 12/64),
+			new THREE.Vector2(12/64, 16/64),
+			new THREE.Vector2(0.125, 16/64)
 		];
 		var leftLeg2Left = [
 			new THREE.Vector2(0, 0),
 			new THREE.Vector2(0.0625, 0),
-			new THREE.Vector2(0.0625, 0.1875),
-			new THREE.Vector2(0, 0.1875)
+			new THREE.Vector2(0.0625, 12/64),
+			new THREE.Vector2(0, 12/64)
 		];
 		var leftLeg2Front = [
 			new THREE.Vector2(0.0625, 0),
 			new THREE.Vector2(0.125, 0),
-			new THREE.Vector2(0.125, 0.1875),
-			new THREE.Vector2(0.0625, 0.1875)
+			new THREE.Vector2(0.125, 12/64),
+			new THREE.Vector2(0.0625, 12/64)
 		];
 		var leftLeg2Right = [
 			new THREE.Vector2(0.125, 0),
-			new THREE.Vector2(0.1875, 0),
-			new THREE.Vector2(0.1875, 0.1875),
-			new THREE.Vector2(0.125, 0.1875)
+			new THREE.Vector2(12/64, 0),
+			new THREE.Vector2(12/64, 12/64),
+			new THREE.Vector2(0.125, 12/64)
 		];
 		var leftLeg2Back = [
-			new THREE.Vector2(0.1875, 0),
-			new THREE.Vector2(0.25, 0),
-			new THREE.Vector2(0.25, 0.1875),
-			new THREE.Vector2(0.1875, 0.1875)
+			new THREE.Vector2(12/64, 0),
+			new THREE.Vector2(16/64, 0),
+			new THREE.Vector2(16/64, 12/64),
+			new THREE.Vector2(12/64, 12/64)
 		];
-		var leftLeg2Box = new THREE.BoxGeometry(4.5, 13.5, 4.5, 0, 0, 0);
+		var leftLeg2Box = new THREE.BoxGeometry(4 + off, 12 + off, 4 + off, 0, 0, 0);
 		leftLeg2Box.faceVertexUvs[0] = [];
 		leftLeg2Box.faceVertexUvs[0][0] = [leftLeg2Right[3], leftLeg2Right[0], leftLeg2Right[2]];
 		leftLeg2Box.faceVertexUvs[0][1] = [leftLeg2Right[0], leftLeg2Right[1], leftLeg2Right[2]];
@@ -875,16 +951,21 @@ body {
 		leftLeg2Mesh.position.y = -22;
 		leftLeg2Mesh.position.x = 2;
  		scene.add(leftLeg2Mesh);
+        
+        updateToggles();
 		
-		// Add to page
-		container = document.getElementById('model');
-		
- 		renderer = new THREE.WebGLRenderer({alpha: true});
-		renderer.setSize(window.innerWidth - sidebarWidth, window.innerHeight);
-		
-		window.addEventListener('resize', onWindowResize, false);
+        if (!rendererIsSetup) {
+            // Add to page
+            container = document.getElementById('model');
 
-		model.appendChild(renderer.domElement);
+            renderer = new THREE.WebGLRenderer({alpha: true});
+            renderer.setSize(window.innerWidth - sidebarWidth, window.innerHeight);
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            model.appendChild(renderer.domElement);
+            rendererIsSetup = true;
+        }
 	}
 	
 	function onWindowResize() {
@@ -895,14 +976,16 @@ body {
 	}
 	
 	function Animate() {
-		requestAnimationFrame(Animate);
-		
-		camera.rotation.y = alpha;
-		
-		//alpha = /*(Math.PI / 2)*/ + (Math.PI / 16);
+        requestAnimationFrame(Animate);
+        
+        //Camera Movement
+        camera.position.x =  radius*Math.sin(rotationX) * Math.abs(Math.cos(rotationY));
+        camera.position.y =  -radius*Math.sin(rotationY) + camera_translate;
+        camera.position.z =  radius*Math.cos(rotationX) * Math.abs(Math.cos(rotationY));
+        camera.lookAt(camera_target.position);
+        
+        //alpha = /*(Math.PI / 2)*/ + (Math.PI / 16);
 		alpha += Math.PI / 320;
-		camera.position.z = radius*Math.cos(alpha);
-		camera.position.x = radius*Math.sin(alpha);
 		
 		//Leg Swing
 		leftLeg2Mesh.rotation.x = leftLegMesh.rotation.x = Math.cos(alpha*4);
@@ -922,6 +1005,21 @@ body {
 		
 		renderer.render(scene, camera);
 	}
+    
+    function updateToggles() {
+        toggleHead();
+        toggleLeftArm();
+        toggleRightArm();
+        toggleBody();
+        toggleLeftLeg();
+        toggleRightLeg();
+        toggleHead2();
+        toggleLeftArm2();
+        toggleRightArm2();
+        toggleBody2();
+        toggleLeftLeg2();
+        toggleRightLeg2();
+    }
 	
 	// Handle the sidebar input things
 	// Make checkboxes toggle visibility
@@ -1000,7 +1098,7 @@ body {
 		rightLeg2.visible = rightLeg2Toggle.checked;
 	}
 	
-	// Change the username
+	// Change the username via crafatar
 	document.getElementById('username').onkeypress = function(e){
 		if (!e) e = window.event;
 		var keyCode = e.keyCode || e.which;
@@ -1008,6 +1106,14 @@ body {
 			// Enter pressed, set new image
 			img.src = 'https://crafatar.com/skins/' + document.getElementById('username').value;
 		}
+	}
+    
+    //Change the username via file input
+    document.getElementById('file_input').addEventListener("change", loadFile, false);
+	function loadFile(e) {
+		var inputFile = e.target.files[0];
+		console.log(inputFile);
+    	img.src = window.URL.createObjectURL(inputFile);
 	}
 </script>
 </body>
